@@ -18,6 +18,10 @@ local defaultConfig = {
 	textPerc = true,
 	textValues = false,
 	barTexture = defaultTexture,
+    blizzColorsInstead = false,
+    blizzColorsInsteadBroker = false,
+    blizzColorsDefault = false,
+    blizzardColors = FACTION_BAR_COLORS,  --hack to add back Blizzard colors
 	asciiColors = {
 		{ r= .54, g= 0,   b= 0   }, -- hated
 		{ r= 1,   g= .10, b= .1  }, -- hostile
@@ -31,6 +35,7 @@ local defaultConfig = {
 	},
 	useTipTacSkin = true,
 }
+table.insert(defaultConfig.blizzardColors,{ r= 0,   g= .6,  b= .1  })
 
 local defaultCharConfig = {
 	collapsedHeaders = {},
@@ -312,7 +317,7 @@ UpdateTablet = function(self)
 			if showValue then
 				local perc = (value - minVal) / (maxVal - minVal)
 				if level > 9 then level = 9 end
-				local color = config.asciiColors[level]
+				local color = config.blizzColorsInstead and config.blizzardColors[level] or config.asciiColors[level]
 				button.bar:SetVertexColor( color.r, color.g, color.b )
 				button.bar:SetWidth( SIMPLE_BAR_WIDTH * (perc == 0 and 0.0001 or perc) )
 				button.bar:SetTexture(config.barTexture)
@@ -591,7 +596,8 @@ UpdateBar = function()
 	if config.blockDisplay == "text" then
         wipe(tt)
 		if level > 9 then level = 9 end
-		local asciiColor = config.asciiColors[level]
+        local asciiColor = config.blizzColorsInsteadBroker and config.blizzardColors[level] or config.asciiColors[level]
+--		local asciiColor = config.asciiColors[level]
 		asciiColor = ("|cff%.2x%.2x%.2x"):format(asciiColor.r*255, asciiColor.g*255, asciiColor.b*255)
 		if config.textStanding then
 			merk = 0
@@ -630,7 +636,7 @@ UpdateBar = function()
 		if config.textFaction then
             local color = defaultColor
             if config.textFactionColor then
-                color = config.asciiColors[level]
+                color = config.blizzColorsInsteadBroker and config.blizzardColors[level] or config.asciiColors[level]
             end
 			tinsert(tt,1, ("|cff%.2x%.2x%.2x%s|r"):format(color.r*255, color.g*255, color.b*255, name) )
 		end
@@ -694,7 +700,7 @@ function f:SetupConfigMenu()
 			{ text = "Dual Colors",  radio = "asciiBar", val = "dualColors" } } },
 		{ text = "Text", radio = "blockDisplay", val = "text", submenu = {
 			{ text = "Faction", check = "textFaction" },
-			{ text = "Faction Text Color", check = "textFactionColor" },
+			{ text = "Faction Text Color as Rep Color", check = "textFactionColor" },
 			{ text = "Standing", check = "textStanding" },
 			{ text = "Percentage", check = "textPerc" },
 			{ text = "Raw Numbers", check = "textValues" },
@@ -719,7 +725,17 @@ function f:SetupConfigMenu()
 			end
 		end
 	end},
-	{ text = "Reputation Colors", submenu = {
+	{ text = "Blizzard Colors", submenu = {
+		{ text = levels[1], color = "blizzardColors", index = 1 },
+		{ text = levels[2], color = "blizzardColors", index = 2 },
+		{ text = levels[3], color = "blizzardColors", index = 3 },
+		{ text = levels[4], color = "blizzardColors", index = 4 },
+		{ text = levels[5], color = "blizzardColors", index = 5 },
+		{ text = levels[6], color = "blizzardColors", index = 6 },
+		{ text = levels[7], color = "blizzardColors", index = 7 },
+		{ text = levels[8], color = "blizzardColors", index = 8 },
+		{ text = levels[9], color = "blizzardColors", index = 9 } } },
+	{ text = "ASCII Colors", submenu = {
 		{ text = levels[1], color = "asciiColors", index = 1 },
 		{ text = levels[2], color = "asciiColors", index = 2 },
 		{ text = levels[3], color = "asciiColors", index = 3 },
@@ -729,6 +745,10 @@ function f:SetupConfigMenu()
 		{ text = levels[7], color = "asciiColors", index = 7 },
 		{ text = levels[8], color = "asciiColors", index = 8 },
 		{ text = levels[9], color = "asciiColors", index = 9 } } },
+    { text = "Color Options", submenu = {
+        { text = "Use Blizzard colors for broker", check = "blizzColorsInsteadBroker" },
+        { text = "Use Blizzard colors for tooltip", check = "blizzColorsInstead" },
+        { text = "Reload Blizzard colors on startup", check = "blizzColorsDefault" } } },
 	{ text = "Tooltip Size", submenu = {
 		{ text =  "90%", radio = "scale", val = 0.9 },
 		{ text = "100%", radio = "scale", val = 1.0 },
@@ -763,6 +783,7 @@ function f:SetupConfigMenu()
 	SetOption = function(bt, var, val, checked)
 		config[var] = val or checked
 		if var == "blockDisplay" or var == "asciiBar" or var:sub(1, 4) == "text" then UpdateBar() end
+        if var == "blizzColorsInsteadBroker" then UpdateBar() end
 		if not val then return end
 
 		local sub = bt:GetName():sub(1, 19)
@@ -868,6 +889,7 @@ function f:ADDON_LOADED(addon)
 	if addon ~= addonName then return end
 
 	AraReputationsDB = AraReputationsDB or defaultConfig
+    if not AraReputationsDB.blizzardColors[9] then table.insert(AraReputationsDB.blizzardColors,{ r= 0,   g= .6,  b= .1  }) end --insert Paragon color
 	config = AraReputationsDB
 	for k, v in next, defaultConfig do -- easy upgrade
 		if config[k] == nil then config[k] = v end
@@ -880,6 +902,10 @@ function f:ADDON_LOADED(addon)
 		if char[k] == nil then char[k] = v end
 	end
 
+    if config.blizzColorsDefault then
+        config.blizzardColors = defaultConfig.blizzardColors
+    end
+    
 	f:SetFrameStrata"TOOLTIP"
 	f:SetClampedToScreen(true)
 	f:EnableMouse(true)
