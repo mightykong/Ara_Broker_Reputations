@@ -13,7 +13,7 @@ local defaultConfig = {
 	blockDisplay = "text",
 	asciiBar = "dualColors",
 	textFaction = true,
-    textFactionColor = true,
+    textFactionColor = "blizzard",
 	textStanding = true,
 	textPerc = true,
 	textValues = false,
@@ -635,9 +635,9 @@ UpdateBar = function()
 		end
 		if config.textFaction then
             local color = defaultColor
-            if config.textFactionColor then
-                color = config.blizzColorsInsteadBroker and config.blizzardColors[level] or config.asciiColors[level]
-            end
+       		if config.textFactionColor == "none"     then color = defaultColor end
+       		if config.textFactionColor == "ascii"    then color = config.asciiColors[level] end 
+       		if config.textFactionColor == "blizzard" then color = config.blizzardColors[level] end
 			tinsert(tt,1, ("|cff%.2x%.2x%.2x%s|r"):format(color.r*255, color.g*255, color.b*255, name) )
 		end
 		block.text = table.concat(tt, " - ")
@@ -699,8 +699,11 @@ function f:SetupConfigMenu()
 			{ text = "Single Color", radio = "asciiBar", val = "singleColor" },
 			{ text = "Dual Colors",  radio = "asciiBar", val = "dualColors" } } },
 		{ text = "Text", radio = "blockDisplay", val = "text", submenu = {
+			{ text = "Faction Name Color", radio = "textBlock", val = "factionNameColor", submenu = {
+                { text = "No Color", radio = "textFactionColor", val = "default" },
+                { text = "ASCII Color", radio = "textFactionColor", val = "ascii" },
+                { text = "Blizzard Color",  radio = "textFactionColor", val = "blizzard" } } },
 			{ text = "Faction", check = "textFaction" },
-			{ text = "Faction Text Color as Rep Color", check = "textFactionColor" },
 			{ text = "Standing", check = "textStanding" },
 			{ text = "Percentage", check = "textPerc" },
 			{ text = "Raw Numbers", check = "textValues" },
