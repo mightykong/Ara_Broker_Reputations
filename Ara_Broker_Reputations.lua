@@ -410,12 +410,38 @@ UpdateTablet = function(self)
 		local currentFirstID = nil
 		local compareFunc = function(a,b)
 			if a.rep.level == b.rep.level then
-				local aRep = string.gsub(a.rep.textValue, "/.+", "")
-				local bRep = string.gsub(b.rep.textValue, "/.+", "")
+                local aRep          = nil
+                local bRep          = nil
+                local repSortByName = false
+                -- As of the Legion update where Paragon rep was added, Exalted rep and Best Friend rep 
+                -- no longer return numerical values.  As they don't, this new code sorts those factions
+                -- alphabetically by name (within Exalted or Best Friend)
+                -- This also fixes an error where tonumber(aRep) and tonumber (bRep) for Exalted and 
+                -- Best Friend were causing errors because they return nil as the numeric rep value
+                if a.rep.textValue == levels[8] then 
+                    --Exalted Rep
+                    repSortByName = true
+                elseif a.rep.textValue == (select(7,GetFriendshipReputation(tonumber(a.rep.FactionID)))) then
+                    --Best Friend Rep
+                    repSortByName = true
+                else
+                    aRep = string.gsub(a.rep.textValue, "/.+", "")
+                end
+                if b.rep.textValue == levels[8] then
+                    --Exalted Rep
+                    repSortByName = true
+                elseif b.rep.textValue == (select(7,GetFriendshipReputation(tonumber(b.rep.FactionID)))) then
+                    --Best Friend Rep
+                    repSortByName = true
+                else
+                    bRep = string.gsub(b.rep.textValue, "/.+", "")
+                end
 				
-				return tonumber(aRep) > tonumber(bRep)
-			else
-				return a.rep.level > b.rep.level
+				if repSortByName then 
+                    return a.rep.name < b.rep.name
+                else
+                    return tonumber(aRep) > tonumber(bRep)
+                end
 			end
 		end
 	
