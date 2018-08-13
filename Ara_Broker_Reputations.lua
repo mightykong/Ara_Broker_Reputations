@@ -48,7 +48,7 @@ local backdrop = { bgFile="Interface\\Buttons\\WHITE8X8", edgeFile="Interface\\T
 local GetFactionInfo, FACTION_INACTIVE, GUILD, OTHER =
 	GetFactionInfo, FACTION_INACTIVE, GUILD, OTHER
 
-local Friends = {1273, 1275, 1276, 1277, 1278, 1279, 1280, 1281, 1282, 1283, 1358, 1733, 1736, 1737, 1738, 1739, 1740, 1741, 1975, 2135}
+--local Friends = {1273, 1275, 1276, 1277, 1278, 1279, 1280, 1281, 1282, 1283, 1358, 1733, 1736, 1737, 1738, 1739, 1740, 1741, 1975, 2135}
 
 local levels = {} for i=1,8 do levels[i]=_G["FACTION_STANDING_LABEL"..i] end
 table.insert(levels,"Paragon") -- Insert Paragon description into table
@@ -108,10 +108,9 @@ local function Menu_OnLeave(self)
 		highlight:SetAlpha(0)
 		if not config.showSeparateValues and not config.showRawInstead then
 			self.fs:SetText(levels[self.rep.level])
-			for i2 = 1, 20 do
-				if tonumber(self.rep.FactionID) == Friends[i2] then
-					self.fs:SetText(select(7,GetFriendshipReputation(tonumber(self.rep.FactionID))))
-				end
+			local friendID, friendRep, friendMaxRep, friendName, friendText, friendTexture, friendTextLevel, friendThreshold, nextFriendThreshold = GetFriendshipReputation(self.rep.FactionID)
+			if (friendID ~= nil) then
+                self.fs:SetText(friendTextLevel)  --self.fs:SetText(select(7,GetFriendshipReputation(tonumber(self.rep.FactionID))))           
 			end
 		end
 		CallModule("OnLeaveFaction", self)
@@ -141,25 +140,20 @@ local function Faction_OnClick(self, button)
 		UpdateTablet()
 	elseif button == "RightButton" then
 		if not rep.showValue then return end
-		merk = 0
-		for i2 = 1, 20 do
-			if tonumber(rep.FactionID) == Friends[i2] then
-				merk = 1
+        local friendID, friendRep, friendMaxRep, friendName, friendText, friendTexture, friendTextLevel, friendThreshold, nextFriendThreshold = GetFriendshipReputation(rep.FactionID)
+        if (friendID ~= nil) then
+			if rep.textValue == (friendTextLevel) then
+				ChatFrame_OpenChat(rep.name.." - "..friendTextLevel, DEFAULT_CHAT_FRAME)
+			else
+				ChatFrame_OpenChat(rep.name.." - "..friendTextLevel.." - "..rep.textValue, DEFAULT_CHAT_FRAME)
 			end
-		end
-		if merk == 0 then
+        else
 			if rep.textValue == levels[8] then
 				ChatFrame_OpenChat(rep.name.." - "..levels[rep.level], DEFAULT_CHAT_FRAME)
 			else
 				ChatFrame_OpenChat(rep.name.." - "..levels[rep.level].." - "..rep.textValue, DEFAULT_CHAT_FRAME)
 			end
-		else
-			if rep.textValue == (select(7,GetFriendshipReputation(tonumber(self.rep.FactionID)))) then
-				ChatFrame_OpenChat(rep.name.." - "..select(7,GetFriendshipReputation(tonumber(self.rep.FactionID))), DEFAULT_CHAT_FRAME)
-			else
-				ChatFrame_OpenChat(rep.name.." - "..select(7,GetFriendshipReputation(tonumber(self.rep.FactionID))).." - "..rep.textValue, DEFAULT_CHAT_FRAME)
-			end
-		end
+        end
 	else
 		SetWatchedFactionIndex( GetWatchedFactionInfo() == rep.name and 0 or rep.index)
 		if focusedButton and focusedButton.rep.name then focusedButton.faction:SetText( (rep.header and "|cffffffff" or "|cffffd100")..focusedButton.rep.name ) end
@@ -274,22 +268,35 @@ UpdateTablet = function(self)
 			skipChild = skip and not isChild
 		end
 		if not skip or isHeader and not (isChild and skipChild) then
-			if value >= 42000 then --fixes for 7.2 Paragon Rep
-				if (FactionID and C_Reputation.IsFactionParagon(FactionID)) then
-					local pVal, pMax, pRewQID, pRewPend = C_Reputation.GetFactionParagonInfo(FactionID)
-					pValTtl = pVal
-					pVal = math.fmod(pVal, pMax)
-					level = 9; minVal = 0; value = pVal; maxVal = pMax
-					textValue = ("%i / %i"):format(value-minVal, maxVal-minVal) 
+            local standingText = levels[level]
+            local isCapped = level == MAX_REPUTATION_REACTION
+            if (FactionID and C_Reputation.IsFactionParagon(FactionID)) then
+                local currValue, threshold, rewardQuestID, hasRewardPending = C_Reputation.GetFactionParagonInfo(FactionID)
+                local pMin = currValue - (currValue % threshold)
+                local pMax = pMin + threshold
+                pValTtl = currValue
+                value   = value + currValue
+                minVal  = minVal + pMin
+                maxVal  = maxVal + pMax
+                level   = MAX_REPUTATION_REACTION + 1
+                standingText = levels[level]
+                isCapped = false
+                textValue = ("%i / %i"):format(value-minVal, maxVal-minVal) 
+            end
+			-- check if this is a friendship faction 
+			local friendID, friendRep, friendMaxRep, friendName, friendText, friendTexture, friendTextLevel, friendThreshold, nextFriendThreshold = GetFriendshipReputation(FactionID)
+			if (friendID ~= nil) then
+				name = friendName
+				standingText = friendTextLevel
+				if ( nextFriendThreshold ) then
+					minVal, maxVal, value = friendThreshold, nextFriendThreshold, friendRep
 				else
-					textValue = levels[level]; minVal = 0; maxVal = value
-					for i2 = 1, 20 do
-						if FactionID == Friends[i2] then
-							textValue = (select(7,GetFriendshipReputation(FactionID)))
-						end
-					end                
+					isCapped = true
 				end
-			else
+			end
+            if isCapped then 
+                textValue = standingText
+            else
 				textValue = ("%i / %i"):format(value-minVal, maxVal-minVal) 
 			end
 
@@ -315,7 +322,8 @@ UpdateTablet = function(self)
 			if name == watchedFaction then focusedButton = button end
 
 			if showValue then
-				local perc = (value - minVal) / (maxVal - minVal)
+				local perc = 0
+                if isCapped then perc = 1 else perc = (value - minVal) / (maxVal - minVal) end
 				if level > 9 then level = 9 end
 				local color = config.blizzColorsInstead and config.blizzardColors[level] or config.asciiColors[level]
 				button.bar:SetVertexColor( color.r, color.g, color.b )
@@ -324,11 +332,10 @@ UpdateTablet = function(self)
 				if config.showRawInstead and not config.showSeparateValues then
 					button.fs:SetText(button.rep.textValue)
 				else
-					button.fs:SetText( levels[level])
-					for i2 = 1, 20 do
-						if FactionID == Friends[i2] then
-							button.fs:SetText( select(7,GetFriendshipReputation(FactionID)))
-						end
+					button.fs:SetText( levels[level] )
+                    local friendID, friendRep, friendMaxRep, friendName, friendText, friendTexture, friendTextLevel, friendThreshold, nextFriendThreshold = GetFriendshipReputation(FactionID)
+                    if (friendID ~= nil) then
+                        button.fs:SetText( friendTextLevel )
 					end
 				end
 				button.bar:Show() button.fs:Show()
@@ -568,18 +575,18 @@ UpdateBar = function()
     if firstCall then
 		for i=1, GetNumFactions() do
 			local pValTtl = nil
-			local name, _, _, _, _, value, _, _, isHeader, _, hasRep, _, _, factID = GetFactionInfo(i)
-			if name then
-				if (factID and C_Reputation.IsFactionParagon(factID)) then
-					local pVal, pMax, pRewQID, pRewPend = C_Reputation.GetFactionParagonInfo(factID)
-					pValTtl = pVal
-					pVal = math.fmod(pVal, pMax)
-					if not isHeader or hasRep then startingRep[name] = pValTtl end
+
+            local name, showValue, level, minVal, maxVal, value, atWar, canBeAtWar, isHeader, isCollapsed, hasRep, isWatched, isChild, FactionID = GetFactionInfo(i)
+            if name then
+                if (FactionID and C_Reputation.IsFactionParagon(FactionID)) then
+                    local currValue, threshold, rewardQuestID, hasRewardPending = C_Reputation.GetFactionParagonInfo(FactionID)
+                    pValTtl = currValue
+                    if not isHeader or hasRep then startingRep[name] = pValTtl end
 				else
 					if not isHeader or hasRep then startingRep[name] = value end
 				end
 				if name == watchedFaction then FactionID = factID; watchedIndex = i end
-			end
+            end
 		end
 		firstCall = false
 	end
@@ -601,52 +608,60 @@ UpdateBar = function()
 	end
 
 	local pValTtl = nil
+    local isCapped = level == MAX_REPUTATION_REACTION
+    local standingText = levels[level]
 	if FactionID then
-		if value >= 42000 then
-			if (C_Reputation.IsFactionParagon(FactionID)) then
-				local pVal, pMax, pRewQID, pRewPend = C_Reputation.GetFactionParagonInfo(FactionID)
-				pValTtl = pVal
-				pVal = math.fmod(pVal, pMax)
-				level = 9; minVal = 0; value = pVal; maxVal = pMax
-			else
-				minVal = 0; maxVal = value
-			end
-		end
-	else
-		if value >= 42000 then minVal = 0; maxVal = value end
+        if (FactionID and C_Reputation.IsFactionParagon(FactionID)) then
+            local currValue, threshold, rewardQuestID, hasRewardPending = C_Reputation.GetFactionParagonInfo(FactionID)
+            local pMin = currValue - (currValue % threshold)
+            local pMax = pMin + threshold
+            pValTtl = currValue
+            value   = value + currValue
+            minVal  = minVal + pMin
+            maxVal  = maxVal + pMax
+            level   = MAX_REPUTATION_REACTION + 1
+            standingText = levels[level]
+            isCapped = false
+        end
+        -- check if this is a friendship faction 
+        local friendID, friendRep, friendMaxRep, friendName, friendText, friendTexture, friendTextLevel, friendThreshold, nextFriendThreshold = GetFriendshipReputation(FactionID)
+        if (friendID ~= nil) then
+            name = friendName
+            standingText = friendTextLevel
+            if ( nextFriendThreshold ) then
+                minVal, maxVal, value = friendThreshold, nextFriendThreshold, friendRep
+            else
+                isCapped = true
+            end
+        end
 	end
-	
+    
 	local c1, c2 = config.asciiColors[level], config.asciiColors[level]
-	local perc = (value - minVal) / (maxVal - minVal)
+	local perc = 0
+    if isCapped then perc = 1 else perc = (value - minVal) / (maxVal - minVal) end
 
 	if config.blockDisplay == "text" then
         wipe(tt)
 		if level > 9 then level = 9 end
         local asciiColor = config.blizzColorsInsteadBroker and config.blizzardColors[level] or config.asciiColors[level]
---		local asciiColor = config.asciiColors[level]
 		asciiColor = ("|cff%.2x%.2x%.2x"):format(asciiColor.r*255, asciiColor.g*255, asciiColor.b*255)
 		if config.textStanding then
-			merk = 0
-			for i2 = 1, 20 do
-				if FactionID == Friends[i2] then
-					tt[#tt+1] = (#tt>0 and "" or asciiColor)..select(7,GetFriendshipReputation(FactionID)).."|r"
-					merk = 1
-				end
-			end
-			if merk == 0 then
-				tt[#tt+1] = (#tt>0 and "" or asciiColor)..levels[level].."|r"
-			end
+            tt[#tt+1] = (#tt>0 and "" or asciiColor)..standingText.."|r"
 		end
 		if config.textPerc then
 			tt[#tt+1] = ("%s%i%%|r"):format(#tt>0 and "" or asciiColor, floor(perc*100))
 		end
 		if config.textValues then
-			if value < 42000 then
+			if not isCapped then
 				tt[#tt+1] = ("%s%i/%i|r"):format(#tt>0 and "" or asciiColor, value - minVal, maxVal - minVal)
 			end
 		end
-		if config.textToGo and (level < 8 or level == 9) then
-			tt[#tt+1] = ("%s%i to go|r"):format(#tt>0 and "" or asciiColor, maxVal - value)
+		if config.textToGo then
+            if not isCapped then
+                tt[#tt+1] = ("%s%i to go|r"):format(#tt>0 and "" or asciiColor, maxVal - value)
+            else
+                tt[#tt+1] = ("Capped|r") 
+            end
 		end
 		if config.textSession then
 			local gain = 0
